@@ -1,0 +1,27 @@
+# Dependencies (installed in image)
+node_modules/
+
+# Git & docs
+.git/
+.gitignore
+*.md
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+
+# IDE & test
+.idea/
+.vscode/
+coverage/
+.nyc_output/
+
+# Compose not needed in build context
+docker-compose.yml
+docker-compose.override.yml
