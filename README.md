@@ -82,12 +82,55 @@ curl http://localhost:5004/test
 | Host (`npm start`) | `127.0.0.1:7001,127.0.0.1:7002,...` | `127.0.0.1` |
 | Docker (`docker compose`) | `redis-node-1:7001,redis-node-2:7002,...` | not needed |
 
+## QA (Kubernetes / Windows)
+
+`Failed to refresh slots cache` on QA usually means the app **can reach the seed node** but **cannot reach the IPs Redis advertises** in `CLUSTER SLOTS` (pod IPs like `10.x.x.x`).
+
+### App runs inside the same K8s cluster
+
+```env
+REDIS_CLUSTER_NODES=redis-cluster-0.redis-headless...:6379,redis-cluster-1...,redis-cluster-2...
+```
+
+No NAT host needed if pod IPs are routable. Ensure network policy allows TCP **6379** (and cluster bus **16379** if required).
+
+### App runs on Windows (outside cluster)
+
+`*.svc.cluster.local` **does not resolve** from a Windows VM unless you use VPN/split DNS.
+
+**Option A — port-forward (dev/QA test)**
+
+```bash
+kubectl port-forward -n redis-cluster svc/redis-cluster 6379:6379
+```
+
+```env
+REDIS_CLUSTER_NODES=127.0.0.1:6379
+REDIS_CLUSTER_NAT_HOST=127.0.0.1
+```
+
+**Option B — QA LoadBalancer / hostname**
+
+Use the LB hostname as both seed and NAT target:
+
+```env
+REDIS_CLUSTER_NODES=qa-redis.example.com:6379
+REDIS_CLUSTER_NAT_HOST=qa-redis.example.com
+```
+
+Debug what Redis advertises:
+
+```bash
+curl http://localhost:5004/diagnose
+```
+
 ## Troubleshooting
 
 **`Failed to refresh slots cache` / cluster not ready**
 
-- Confirm cluster is up: `redis-cli -p 7001 cluster info`
-- From host: set `REDIS_CLUSTER_NAT_HOST=127.0.0.1` with loopback seed nodes
+- Run `GET /diagnose` — check `advertisedAddresses` vs what your host can reach
+- Set `REDIS_CLUSTER_NAT_HOST` to a **reachable** hostname (LB, `127.0.0.1` with port-forward)
+- Local Docker: `REDIS_CLUSTER_NAT_HOST=127.0.0.1` with `127.0.0.1:7001,...` seeds
 - In Docker: ensure the app is on `redis-enterprise-cluster_redis-cluster-net`
 
 **`ECONNREFUSED`**
