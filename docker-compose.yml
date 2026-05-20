@@ -2,9 +2,9 @@ services:
   redis-test:
     build: .
     ports:
-      - "${HOST_PORT:-5004}:3000"
+      - "${HOST_PORT:-5004}:5004"
     environment:
-      PORT: 3000
+      PORT: 5004
       REDIS_MODE: cluster
       REDIS_CLUSTER_NODES: redis-node-1:7001,redis-node-2:7002,redis-node-3:7003,redis-node-4:7004,redis-node-5:7005,redis-node-6:7006
     networks:

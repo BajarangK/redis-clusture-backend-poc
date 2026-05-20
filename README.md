@@ -67,7 +67,7 @@ curl http://localhost:5004/test
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `5004` | HTTP port (`npm start`) |
-| `HOST_PORT` | `5004` | Host port for `docker compose` (maps to container `3000`) |
+| `HOST_PORT` | `5004` | Host port for `docker compose` (maps to container `5004`) |
 | `REDIS_MODE` | `cluster` | `cluster` or `standalone` |
 | `REDIS_CLUSTER_NODES` | `127.0.0.1:6379` | Comma-separated `host:port` seed nodes |
 | `REDIS_CLUSTER_NAT_HOST` | — | When using `127.0.0.1` seeds from host, set to `127.0.0.1` |

@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-poc-config
+  namespace: redis-cluster
+data:
+  PORT: "5004"
+  REDIS_MODE: "cluster"
+  REDIS_CLUSTER_NODES: "redis-cluster-0.redis-headless.redis-cluster.svc.cluster.local:6379,redis-cluster-1.redis-headless.redis-cluster.svc.cluster.local:6379,redis-cluster-2.redis-headless.redis-cluster.svc.cluster.local:6379"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cluster-poc
+  namespace: redis-cluster
+  labels:
+    app: redis-cluster-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-cluster-poc
+  template:
+    metadata:
+      labels:
+        app: redis-cluster-poc
+    spec:
+      containers:
+        - name: redis-cluster-poc
+          image: redis-cluster-poc:qa
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5004
+          envFrom:
+            - configMapRef:
+                name: redis-cluster-poc-config
+          # env:
+          #   - name: REDIS_PASSWORD
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: redis-secret
+          #         key: password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5004
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5004
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-poc
+  namespace: redis-cluster
+spec:
+  selector:
+    app: redis-cluster-poc
+  ports:
+    - port: 5004
+      targetPort: 5004
+  type: ClusterIP
