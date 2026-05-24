@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: redis-cluster-poc
-          image: shehzadroyalcyber/redis-cluster-poc:qa
+          image: shehzadroyalcyber/redis-cluster-poc:1.0.0
           imagePullPolicy: Always
           ports:
             - containerPort: 5004
