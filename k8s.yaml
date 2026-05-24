@@ -27,8 +27,8 @@ spec:
     spec:
       containers:
         - name: redis-cluster-poc
-          image: redis-cluster-poc:qa
-          imagePullPolicy: IfNotPresent
+          image: shehzadroyalcyber/redis-cluster-poc:qa
+          imagePullPolicy: Always
           ports:
             - containerPort: 5004
           envFrom:
