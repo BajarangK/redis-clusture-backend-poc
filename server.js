@@ -77,7 +77,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, async () => {
-  console.log(`[server] http://0.0.0.0:${PORT}`);
+  console.log(`[server] http://localhost:${PORT}`);
   try {
     await redis.ping();
     console.log('[redis] startup probe: OK');
