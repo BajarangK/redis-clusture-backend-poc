@@ -1,0 +1,114 @@
+# Build + push Docker image; optionally deploy to Kubernetes (QA).
+# Secrets: DOCKER_USERNAME, DOCKER_PASSWORD, KUBE_CONFIG_ALPHA (base64 kubeconfig for deploy)
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image version (e.g. 1.0.0, 2.2.0). Leave empty to use VERSION file."
+        required: false
+        type: string
+      deploy:
+        description: "Deploy to Kubernetes after push"
+        required: false
+        type: boolean
+        default: true
+
+env:
+  IMAGE_NAME: shehzadroyalcyber/redis-cluster-poc
+  K8S_NAMESPACE: redis-cluster
+  K8S_DEPLOYMENT: redis-cluster-poc
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Using version: ${VERSION}"
+
+      - name: Sync VERSION file
+        run: |
+          echo "${{ steps.version.outputs.version }}" > VERSION
+          sed -i "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}|" k8s.yaml
+          grep "image:" k8s.yaml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload k8s.yaml artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-manifest
+          path: k8s.yaml
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+      || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download k8s.yaml
+        uses: actions/download-artifact@v4
+        with:
+          name: k8s-manifest
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_ALPHA }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Apply and rollout
+        run: |
+          VERSION="${{ needs.build-and-push.outputs.version }}"
+          echo "Deploying ${{ env.IMAGE_NAME }}:${VERSION}"
+          kubectl apply -f k8s.yaml
+          kubectl set image deployment/${{ env.K8S_DEPLOYMENT }} \
+            redis-cluster-poc=${{ env.IMAGE_NAME }}:${VERSION} \
+            -n ${{ env.K8S_NAMESPACE }}
+          kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} \
+            -n ${{ env.K8S_NAMESPACE }} --timeout=180s
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=redis-cluster-poc

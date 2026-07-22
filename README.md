@@ -143,11 +143,65 @@ curl http://localhost:5004/diagnose
 - Stop the other process: `lsof -i :5004` then `kill <pid>`
 - Or use another host port: `HOST_PORT=5005 docker compose up`
 
+## CI/CD (GitHub Actions)
+
+Workflow: `.github/workflows/cicd.yml`
+
+| Trigger | What happens |
+|---------|----------------|
+| Push to `main` | Build & push `shehzadroyalcyber/redis-cluster-poc:<VERSION>` |
+| Tag `v1.0.0` | Build, push `:1.0.0`, deploy to K8s |
+| Manual (Actions → Run workflow) | Choose version + deploy yes/no |
+
+### One-time secrets (GitHub → Settings → Secrets)
+
+| Secret | Value |
+|--------|--------|
+| `DOCKER_USERNAME` | Docker Hub username (e.g. `shehzadroyalcyber`) |
+| `DOCKER_PASSWORD` | Docker Hub access token |
+| `KUBE_CONFIG_ALPHA` | base64 kubeconfig (`cat ~/.kube/config \| base64`) |
+
+### Release flow
+
+```bash
+# bump version
+echo 1.1.0 > VERSION
+# update image line in k8s.yaml to :1.1.0 (or let CI do it)
+
+git add VERSION k8s.yaml
+git commit -m "release: 1.1.0"
+git tag v1.1.0
+git push origin main --tags
+```
+
+Or run **Actions → CI/CD → Run workflow** with version `1.1.0` and deploy checked.
+
+### Manual build (laptop with Docker)
+
+```bash
+./scripts/docker-build-push.sh 1.1.0
+```
+
+### Server (kubectl only — no Docker)
+
+```bash
+kubectl apply -f k8s.yaml
+kubectl set image deployment/redis-cluster-poc \
+  redis-cluster-poc=shehzadroyalcyber/redis-cluster-poc:1.1.0 \
+  -n redis-cluster
+kubectl rollout status deployment/redis-cluster-poc -n redis-cluster
+```
+
 ## Project layout
 
 ```
-server.js           # Express app + Redis client
-docker-compose.yml  # Deploy on cluster Docker network
+server.js                      # Express app
+redis.client.js                # Redis cluster client
 Dockerfile
+docker-compose.yml
+k8s.yaml                       # K8s Deployment + Service
+VERSION                        # Image version (e.g. 1.0.0)
+scripts/docker-build-push.sh
+.github/workflows/cicd.yml     # CI/CD
 .env.example
 ```
